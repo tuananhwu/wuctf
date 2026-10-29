@@ -18,7 +18,7 @@ Dựa vào file `README.md`, ta có được các thông tin sau:
 
 Trong file `FORMAT.md` thì cho ta biết được các thông tin để giải bài này
 
-- file `proof.json` chứa các trường attach_points, prog_chain, map_ids, uid, parent_hash, session_bit
+- file `proof.json` chứa các trường `attach_points`, `prog_chain`, `map_ids`, `uid`, `parent_hash`, `session_bit`
 - `recovered.bin` sẽ lấy được dựa vào việc khôi phục các file bị dấu trong DNS 
 - file `program.bpf`là 1 file elf được viết bằng c và được dịch ra bằng clang
 - Selector tuple sẽ được lấy từ việc sử dụng `realelf -s` và `readelf -x` để có thể đọc được `.rodata` trong `program.bpf`
@@ -35,9 +35,9 @@ Trong bài này, file `.bpf` là file chứa thông tin của hạt nhân từ 1
 
 File `.btf` là phần metadata của file `.bpf` được tách rời ra khỏi file `.bpf`
 
-## Giải thử thách
+## File `proof.json`
 
-### Đọc thông tin .rodata trong `programs.bpf`
+### Tìm  các trường `attach_points`, `uid`,`parent_hash`, `session_bit`
 
 Sử dụng `readelf -s programs.bpf` để xem `symbol table`
 
@@ -49,10 +49,74 @@ Ta đọc dữ liệu trong `.rodata` qua lệnh `readelf -x programs.bpf`
 
 Ta có được thông tin trong `.rodata`.
 
-Do như trong file `FORMAT.md` có viết thì do clang BTF datasec offset cho global luôn bằng 0 ở object level nên để chắc chắn thứ tự của từng biến trong đoạn hex trên thì ta dùng lệnh `readelf -s programs.bpf | grep -E "sel|parent_hash|attach_points"
+Do như trong file `FORMAT.md` có viết thì do clang BTF datasec offset cho global luôn bằng 0 ở object level nên để chắc chắn thứ tự của từng biến trong đoạn hex trên thì ta dùng lệnh `readelf -s programs.bpf | grep -E "sel|parent_hash|attach_points"`
 
 <img width="738" height="106" alt="image" src="https://github.com/user-attachments/assets/21b0ea6d-1f2e-411c-b510-d5058408ab97" />
 
 Từ đó ta lấy được giá trị của 3 biến tương ứng :
 
 `sel` = `e9030000 01000000`
+
+`parent_hash` = `ab77fe24 675b6427`(16 hex đáp)
+
+`attach_points` = `74726163 65706f69 6e742f70 726f6365 73732d65 78656300 686f6f6b 2f736f63`
+
+Mà từ file `FORMAT.md` ta biết `sel` = struct {u32 uid; u8 session_bit}.
+
+Nên `uid` = `0x03e9` và `session_bit` = `0x01`
+
+### Tìm các trường `prog_chain`, `map_ids`
+
+mởi file `bpftool.json`:
+
+```
+
+
+  "programs": [
+    {
+      "id": 41,
+      "map_ids": [
+        7
+      ],
+      "tail_call": 42
+    },
+    {
+      "id": 42,
+      "map_ids": [
+        7
+      ],
+      "tail_call": null
+    }
+  ],
+  "maps": [
+    {
+      "id": 7,
+      "name": "map_7"
+    }
+  ]
+}
+
+```
+
+Ta thấy trong file đấy có 2 `prog_id` lần lượt là 41 và 42 nên trường `prog_chain : [41,42]`
+
+Đồng thời `map_ids : [7]`
+
+### Tạo file `proof.json` 
+
+File `proof.json`:
+
+```
+
+{
+    "attach_points" : ["tracepoint/process-exec", "hook/soc"] , "prog_chain" : [41,42], "map_ids" : [7], "uid": 0x03e9, "parent_hash" : "ab77fe24675b6427", session_bit : 1
+}
+
+```
+
+### File `recovered.bin`
+
+Mở file `dns.pcapng`:
+
+<img width="707" height="90" alt="image" src="https://github.com/user-attachments/assets/a08f63ae-a571-426e-908c-f4d5724b602c" />
+
