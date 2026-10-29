@@ -120,3 +120,84 @@ Mở file `dns.pcapng`:
 
 <img width="707" height="90" alt="image" src="https://github.com/user-attachments/assets/a08f63ae-a571-426e-908c-f4d5724b602c" />
 
+Đoạn code giải mã base32 và tìm ra f1:
+
+```
+
+import base64
+
+b32_f0 = "DMMOG4EMDTGT2"
+b32_f2 = "FBK3RWPYSKZV2"
+b32_f3 = "W6KVUGZAOX43I"
+b32_parity = "R5PVZKUMKM5AC"
+
+
+def b32_decode(s):
+  # Bù dấu '=' cho đủ độ dài chia hết cho 8 của chuẩn Base32
+  pad_len = (8 - len(s) % 8) % 8
+  return base64.b32decode(s + "=" * pad_len)
+
+f0 = b32_decode(b32_f0)
+f2 = b32_decode(b32_f2)
+f3 = b32_decode(b32_f3)
+parity = b32_decode(b32_parity)
+f1 = bytes(a ^ b ^ c ^ d for a, b, c, d in zip(f0, f2, f3, parity))
+print("f1 (Hex)       :", f1.hex())
+
+```
+
+Do len của tin truyền đi là 32 byte mà mỗi thông tin gửi đi có 8 byte, nên thông tin gửi đi hoàn chỉnh là `1b18e3710c1e669a1187476716ac94702855b8d9f892b35ab7955a1b2075f9b2`
+
+Đoạn mã tìm steamkey:
+
+```
+
+import hashlib
+import json
+
+meta = {"uid": 1001, "session_bit": 1, "parent_hash": "ab77fe24675b6427"}
+boot_id = "28f227e7-123e-e84f-c023-fc215e94e7d2"
+
+canonical_json = json.dumps(meta, separators=(",", ":"), sort_keys=True)
+
+seed_string = canonical_json + boot_id
+
+stream_key = hashlib.sha256(seed_string.encode("utf-8")).digest()
+
+print("streamkey (Hex):", stream_key.hex())
+
+```
+
+streamkey = `d9ef473943eced20a91f8fa700c5cdbef96be6fa6b0e51678d7f6faca2c3ae61`
+
+Đoạn mã tìm keystream:
+
+```
+
+import hashlib
+
+stream_key_hex = (
+    "9a64bf7727e4eec47d2f33f990a071569a918a53e9a11a88be3381a17937d570"
+)
+stream_key = bytes.fromhex(stream_key_hex)
+
+i = 0
+block_index = i.to_bytes(4, byteorder="big")
+
+data_to_hash = stream_key + block_index
+
+keystream = hashlib.sha256(data_to_hash).digest()
+
+print("Keystream (Hex)  :", keystream.hex())
+
+```
+
+keystream = `9be1c0189a10caeadb8733d2d961e4ca43cc7c0b022c72ac36726afab4533771`
+
+Đoạn mã tính `payload` dồng thời cũng xuất ra file `recovered.bin`
+
+## Verify và lấy flag
+
+<img width="662" height="61" alt="image" src="https://github.com/user-attachments/assets/dc5d33c6-3824-4a2d-80c0-7ad2b0fb5ad7" />
+
+Vậy flag là `CSCV2026{bpf_t4il_c4lls_l34v3_aud1t4bl3_tr4c3s}`
